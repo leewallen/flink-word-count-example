@@ -1,12 +1,9 @@
 package app;
 
-import app.types.Temperature;
 import app.util.CLI;
 import app.util.WordCountData;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.FlatMapFunction;
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.MemorySize;
@@ -15,7 +12,6 @@ import org.apache.flink.connector.file.src.FileSource;
 import org.apache.flink.connector.file.src.reader.TextLineFormat;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction;
 import org.apache.flink.util.Collector;
@@ -27,6 +23,11 @@ public class WordCount {
   // *************************************************************************
   // PROGRAM
   // *************************************************************************
+
+  /*
+   * Example command line:
+   *  --execution-mode BATCH --inputs ./src/main/resources/temp-data.json
+   */
 
   public static void main(String[] args) throws Exception {
     final CLI params = CLI.fromArgs(args);
@@ -81,8 +82,8 @@ public class WordCount {
       // The text lines read from the source are split into words
       // using a user-defined function. The tokenizer, implemented below,
       // will output each word as a (2-tuple) containing (word, 1)
-      text.process(new TempDataSource())
-        .name("temperature")
+      text.flatMap(new Tokenizer())
+        .name("tokenizer")
         // keyBy groups tuples based on the "0" field, the word.
         // Using a keyBy allows performing aggregations and other
         // stateful transformations over data on a per-key basis.
@@ -179,17 +180,4 @@ public class WordCount {
       running = false;
     }
   }
-
-  public static final class MapToTemperature implements MapFunction<String, Temperature> {
-
-    @Override
-    public Temperature map(String value) throws Exception {
-      ObjectMapper objectMapper = new ObjectMapper();
-
-      Temperature temperature = new ObjectMapper().readValue(value, Temperature.class);
-
-      return temperature;
-    }
-  }
-
 }
