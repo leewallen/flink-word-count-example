@@ -1,0 +1,141 @@
+plugins {
+    id 'java'
+    id 'application'
+//    id "com.github.sherter.google-java-format" version "${javaFormatVersion}"
+    id "com.google.cloud.tools.jib" version "${jibVersion}"
+    id "com.adarshr.test-logger" version "${testLoggerVersion}"
+    id "com.commercehub.gradle.plugin.avro-base" version "0.9.1"
+
+}
+
+sourceCompatibility = javaVersion
+targetCompatibility = javaVersion
+mainClassName = "app.Application"
+archivesBaseName = 'sessionizer'
+version = System.getenv("CI_PIPELINE_ID")?.
+        replaceFirst(/(\d+)/) { _, v -> "0.0.$v" } ?: "dev"
+
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+
+test {
+    useJUnitPlatform()
+}
+
+configurations {
+    provided
+    flinkLib
+    flinkPlugin
+
+    // always exclude these (also from transitive dependencies) since they are provided by Flink
+    implementation.exclude group: 'org.apache.flink', module: 'force-shading'
+    implementation.exclude group: 'com.google.code.findbugs', module: 'jsr305'
+
+    localCompileClasspath.extendsFrom compileClasspath
+    localRuntimeClasspath.extendsFrom runtimeClasspath
+}
+
+dependencies {
+    implementation "org.apache.flink:flink-java:${flinkVersion}"
+    implementation "org.apache.flink:flink-clients_${scalaBinaryVersion}:${flinkVersion}"
+    implementation "org.apache.flink:flink-streaming-java_${scalaBinaryVersion}:${flinkVersion}"
+    implementation "org.apache.flink:flink-connector-kafka_${scalaBinaryVersion}:${flinkVersion}"
+    implementation "org.apache.flink:flink-connector-files:${flinkVersion}"
+
+    implementation "org.apache.flink:flink-avro:${flinkVersion}"
+    implementation "org.apache.avro:avro:${avroVersion}"
+
+    implementation "com.fasterxml.jackson.core:jackson-core:${jacksonFasterXmlVersion}"
+    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonFasterXmlVersion}"
+
+    implementation 'com.moandjiezana.toml:toml4j:0.7.2'
+
+    flinkPlugin "org.apache.flink:flink-s3-fs-hadoop:${flinkVersion}"
+
+//    implementation "org.apache.logging.log4j:log4j-slf4j-impl:${slf4jImplVersion}"
+//    implementation "org.slf4j:slf4j-api:${slf4jApiVersion}"
+//// https://mvnrepository.com/artifact/org.slf4j/slf4j-simple
+//    implementation 'org.slf4j:slf4j-simple:1.7.36'
+
+    implementation "org.apache.logging.log4j:log4j-api:2.7"
+    implementation "org.apache.logging.log4j:log4j-core:2.7"
+    implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.7"
+            
+
+    testImplementation "org.apache.flink:flink-test-utils_${scalaBinaryVersion}:${flinkVersion}"
+    testImplementation "org.apache.flink:flink-runtime:${flinkVersion}:tests"
+    testImplementation "org.apache.flink:flink-streaming-java_${scalaBinaryVersion}:${flinkVersion}:tests"
+    testImplementation "org.assertj:assertj-core:${assertjVersion}"
+    testImplementation "org.junit.jupiter:junit-jupiter-api:${jupiterVersion}"
+    testImplementation "org.junit.jupiter:junit-jupiter-params:${jupiterVersion}"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${jupiterVersion}"
+}
+
+sourceSets {
+    main.compileClasspath += configurations.provided
+    test.compileClasspath += configurations.provided
+    test.runtimeClasspath += configurations.provided
+    test.java.srcDirs = ["src/test/java"]
+
+    local {
+        compileClasspath += configurations.provided
+        runtimeClasspath += main.output
+        runtimeClasspath += configurations.provided
+    }
+}
+
+apply from: "gradle/jib.groovy"
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+    options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+}
+
+run {
+    applicationDefaultJvmArgs = ["-Dlog4j2.configurationFile=log4j2.properties"]
+    classpath = sourceSets.local.runtimeClasspath
+}
+
+test {
+    useJUnitPlatform()
+    dependsOn 'cleanTest'
+
+    testlogger {
+        theme 'mocha'
+        showExceptions true
+    }
+}
+
+
+task generateAvro(type: com.commercehub.gradle.plugin.avro.GenerateAvroJavaTask, group: "Custom Avro Tasks", description: "Generates a java class from an avro schema") {
+    source("src/main/avro/schema")
+    outputDir = file("src/main/avro/class")
+    fieldVisibility = "PRIVATE"
+}
+
+task copyAvro(type: Copy, group: "Custom Avro Tasks", description: "Copies the java class generated from avro schema to the proper location") {
+    dependsOn generateAvro
+    from "src/main/avro/class"
+    into "src/main/java"
+}
+
+task deleteAvro(type: Delete, group: "Custom Avro Tasks", description: "Deletes the generated java class generated from avro schema") {
+    delete "src/main/avro/class"
+}
+
+generateAvro.dependsOn deleteAvro
+compileJava.dependsOn copyAvro
+
+//googleJavaFormat {
+//    source = sourceSets*.allJava
+//    source 'src/main/java/app/**/*.java'
+//    include '**/*.java'
+//    exclude 'src/main/avro/*.java'
+//    exclude 'src/main/java/dev/**/*.java'
+//}

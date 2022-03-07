@@ -1,0 +1,15 @@
+{
+  "namespace": "app.types",
+  "type": "record",
+  "name": "Temperature",
+  "fields": [
+    {"name": "topic", "type": "string"},
+    {"name": "key", "type": ["string", "null"]},
+    {"name": "currenttime", "type": "string"},
+    {"name": "temp_last_changed_time", "type": "string"},
+    {"name": "fahrenheit", "type": "string"},
+    {"name": "celcius", "type": "string"},
+    {"name": "partition", "type": "int"},
+    {"name": "offset", "type": "int"}
+  ]
+}

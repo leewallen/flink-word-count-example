@@ -1,0 +1,8 @@
+{"namespace": "app.types",
+  "type": "record",
+  "name": "WordCounts",
+  "fields": [
+    {"name": "value", "type": "string"},
+    {"name": "count", "type": "int"}
+  ]
+}
